@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Candid Image Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky toolbar over a two-column workspace — filter rail left, image grid right; stacks on phones. */
+:root {
+  --bg: #f3f4f2;
+  --panel: #ffffff;
+  --ink: #1d2422;
+  --muted: #5f6a66;
+  --line: #d9ddd9;
+  --accent: #1f5c55;
+  --accent-soft: #e1ecea;
+  --keep: #2e7d4f;
+  --keep-soft: #e3f2e8;
+  --remove: #b53a2e;
+  --remove-soft: #f8e4e1;
+  --warn: #8a5a00;
+  --warn-soft: #fbf0d9;
+  --chip: #eceeeb;
+  --font-ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-tag: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141917; --panel: #1c2220; --ink: #e6ebe8; --muted: #9aa6a1; --line: #303936;
+  --accent: #7cc2b8; --accent-soft: #213634; --keep: #6cc792; --keep-soft: #1d3326;
+  --remove: #ef8a7e; --remove-soft: #3a2220; --warn: #e9b75a; --warn-soft: #3a2f17; --chip: #262d2b;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #141917; --panel: #1c2220; --ink: #e6ebe8; --muted: #9aa6a1; --line: #303936;
+  --accent: #7cc2b8; --accent-soft: #213634; --keep: #6cc792; --keep-soft: #1d3326;
+  --remove: #ef8a7e; --remove-soft: #3a2220; --warn: #e9b75a; --warn-soft: #3a2f17; --chip: #262d2b;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tag { font-family: var(--font-tag); font-size: 12px; }
+
+header.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+}
+header.bar h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+header.bar .meta { color: var(--muted); font-size: 12.5px; }
+header.bar .spacer { flex: 1; }
+.who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.who .textbtn { font-size: 12px; }
+
+/* Sign-in: team password and the name shown on marks */
+.gate { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+.gate form { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; width: min(360px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.gate h2 { margin: 0 0 4px; font-size: 17px; }
+.gate p { margin: 0; color: var(--muted); font-size: 13px; }
+.gate input { border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 8px 10px; }
+.gate .err { color: var(--remove); font-size: 12.5px; }
+
+.wrap {
+  display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start;
+  padding-block: 20px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+aside.rail { display: flex; flex-direction: column; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 70px); max-height: calc(100vh - 90px); overflow: auto; padding-right: 2px; }
+@media (max-width: 860px) { aside.rail { position: static; max-height: none; overflow: visible; } }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.box h2 { margin: 0; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+label.lbl { font-size: 12.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+label.lbl small { color: var(--muted); font-weight: 400; }
+
+.taginput { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px; background: var(--bg); min-height: 38px; }
+.taginput input { flex: 1; min-width: 110px; border: 0; background: transparent; outline: none; padding: 3px 4px; font-family: var(--font-tag); font-size: 12.5px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; padding: 2px 4px 2px 8px; background: var(--chip); font-family: var(--font-tag); font-size: 12px; border: 1px solid transparent; }
+.chip button { border: 0; background: none; padding: 0 4px; color: var(--muted); font-size: 14px; line-height: 1; }
+.chip.must { background: var(--accent-soft); color: var(--accent); }
+.chip.not { background: var(--remove-soft); color: var(--remove); text-decoration: line-through; text-decoration-thickness: 1px; }
+.chip.not button { text-decoration: none; }
+
+.presets { display: flex; flex-direction: column; gap: 10px; }
+.preset-group { display: flex; flex-direction: column; gap: 6px; }
+.preset-group h3 { margin: 0; font-size: 12px; font-weight: 600; }
+.preset-group .row { gap: 5px; }
+.pbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; display: inline-flex; gap: 6px; align-items: baseline; }
+.pbtn small { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+.pbtn:hover { border-color: var(--accent); }
+.pbtn.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.pbtn.on small { color: inherit; opacity: .8; }
+select.sel { border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 6px 8px; }
+.textbtn { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12.5px; font-weight: 600; }
+
+.hint { border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+.hint .tag { color: inherit; }
+.hint button { align-self: flex-start; }
+
+main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.summary { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.query { font-size: 15px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.query .op { color: var(--muted); font-weight: 400; font-size: 13px; }
+.scope { color: var(--muted); font-size: 12.5px; }
+.scope b { color: var(--ink); font-weight: 600; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius); padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.tab .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 400; }
+.tab[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dot.keep { background: var(--keep); } .dot.remove { background: var(--remove); }
+.progress { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; display: flex; }
+.progress span { display: block; height: 100%; }
+.progress .k { background: var(--keep); } .progress .r { background: var(--remove); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tools input[type=search] { flex: 1; min-width: 180px; border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 7px 10px; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius); padding: 7px 12px; font-weight: 500; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+@media (max-width: 480px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.tile.keep { border-color: var(--keep); box-shadow: inset 0 0 0 1px var(--keep); }
+.tile.remove { border-color: var(--remove); box-shadow: inset 0 0 0 1px var(--remove); }
+.tile.remove .ph img { opacity: .45; filter: grayscale(.6); }
+.ph { aspect-ratio: 1; background: var(--chip); border: 0; padding: 0; display: block; width: 100%; max-width: 100%; position: relative; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nop { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; color: var(--muted); font-size: 12px; text-align: center; }
+.badge { position: absolute; top: 6px; left: 6px; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 2px 6px; letter-spacing: .03em; text-transform: uppercase; }
+.badge.keep { background: var(--keep); color: var(--panel); }
+.badge.remove { background: var(--remove); color: var(--panel); }
+.tile .info { padding: 8px 8px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile .user { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .note.cred { color: var(--accent); }
+.tile .note { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; }
+.act { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; padding: 5px 0; font-size: 12.5px; font-weight: 600; }
+.act.keep:hover, .act.keep.on { background: var(--keep-soft); border-color: var(--keep); color: var(--keep); }
+.act.remove:hover, .act.remove.on { background: var(--remove-soft); border-color: var(--remove); color: var(--remove); }
+.more { display: flex; justify-content: center; }
+.empty { background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); padding: 36px 20px; text-align: center; color: var(--muted); }
+.empty b { color: var(--ink); display: block; font-size: 15px; margin-bottom: 4px; }
+
+/* Detail view */
+.scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 20; display: flex; justify-content: flex-end; }
+.drawer { background: var(--panel); width: min(560px, 100%); height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 14px;
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: 20px; padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.drawer .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.drawer .top .nav { display: flex; gap: 6px; }
+.drawer .bigwrap { display: block; max-width: 100%; }
+.drawer .pgform { display: flex; flex-direction: column; gap: 6px; }
+.drawer .pgform .row { flex-wrap: nowrap; }
+.pginput { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 7px 10px; font-family: var(--font-tag); font-size: 13px; }
+.drawer .big { display: block; margin-inline: auto; width: min(100%, 420px); max-width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--chip); border-radius: var(--radius); }
+.drawer h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.drawer .cap { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; white-space: pre-line; }
+.drawer .taglist { display: flex; flex-wrap: wrap; gap: 5px; }
+.drawer .taglist button.chip { border: 1px solid var(--line); padding: 2px 8px; background: var(--chip); }
+.drawer .taglist button.chip.hit { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.drawer .decide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.drawer .decide .act { padding: 10px 0; font-size: 14px; }
+.drawer textarea { width: 100%; min-height: 70px; border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 8px; resize: vertical; }
+.drawer .links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+.drawer a { color: var(--accent); }
+.drawer .others { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.drawer .stamp { color: var(--muted); font-size: 12px; }
+.kbd { font-family: var(--font-tag); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: var(--radius); z-index: 30; font-size: 13px; max-width: calc(100% - 32px); }
+.ro { background: var(--warn-soft); color: var(--warn); border-radius: var(--radius); padding: 8px 10px; font-size: 12.5px; }
+@media (prefers-reduced-motion: no-preference) { .tile { transition: border-color .15s; } }
+</style>
+
+<header class="bar">
+  <h1>Candid Image Review</h1>
+  <span class="meta" id="syncMeta">Loading the Candid catalog…</span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+</header>
+
+<div class="wrap">
+  <aside class="rail">
+    <section class="box">
+      <h2>Site sections</h2>
+      <div class="row">
+        <label for="room" class="lbl" style="font-weight:500">Room tag</label>
+        <select id="room" class="sel"></select>
+      </div>
+      <div class="presets" id="presets"></div>
+    </section>
+
+    <section class="box">
+      <h2>Tag filter</h2>
+      <label class="lbl" for="in-must">Must have all of <small>AND</small></label>
+      <div class="taginput" data-kind="must"><input id="in-must" list="taglist" placeholder="add tag…" autocomplete="off"></div>
+      <label class="lbl" for="in-any">Has at least one of <small>OR</small></label>
+      <div class="taginput" data-kind="any"><input id="in-any" list="taglist" placeholder="add tag…" autocomplete="off"></div>
+      <label class="lbl" for="in-not">Exclude <small>NOT</small></label>
+      <div class="taginput" data-kind="not"><input id="in-not" list="taglist" placeholder="add tag…" autocomplete="off"></div>
+      <div id="hints"></div>
+      <div class="row"><button class="textbtn" id="clearAll" type="button">Clear filter</button></div>
+      <datalist id="taglist"></datalist>
+    </section>
+  </aside>
+
+  <main>
+    <section class="summary">
+      <div class="query" id="query"></div>
+      <div class="scope" id="scope"></div>
+      <div class="progress" id="progress" aria-hidden="true"></div>
+      <div class="tabs" id="tabs" role="group" aria-label="Review status"></div>
+      <div class="tools">
+        <input type="search" id="q" placeholder="Search caption, poster, photographer, SKU…" aria-label="Search">
+        <select id="sort" class="sel" aria-label="Sort">
+          <option value="date">Newest first</option>
+          <option value="old">Oldest first</option>
+          <option value="user">By poster</option>
+          <option value="photographer">By photographer</option>
+        </select>
+        <select id="credit" class="sel" aria-label="Photographer credit">
+          <option value="any">Any photographer credit</option>
+          <option value="has">Photographer found</option>
+          <option value="none">No photographer found</option>
+          <option value="manual">Entered by the team</option>
+        </select>
+        <button class="btn" id="exportBtn" type="button">Export removal list</button>
+      </div>
+      <div id="roNote" class="ro" hidden>Review marks aren't available right now. Reload the page to try again.</div>
+    </section>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden></div>
+    <div class="more"><button class="btn" id="moreBtn" type="button" hidden>Show more</button></div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<div class="gate" id="gate" hidden>
+  <form id="gateForm">
+    <h2>Candid Image Review</h2>
+    <p>Enter the team password. Your name is shown on the marks you make.</p>
+    <label class="lbl" for="gatePw">Team password</label>
+    <input id="gatePw" type="password" autocomplete="current-password" required>
+    <label class="lbl" for="gateName">Your name</label>
+    <input id="gateName" autocomplete="name" required>
+    <span class="err" id="gateErr" hidden></span>
+    <button class="btn primary" type="submit">Open the review</button>
+  </form>
+</div>
+
+<script>
+const SECTIONS = [
+  { name: "Design by Category", tags: [["", "All"], ["seating", "Seating"], ["tables", "Tables"], ["lighting", "Lighting"], ["mirrors", "Mirrors"], ["storage_display", "Storage & Display"], ["decor", "Decor"], ["rugs", "Rugs"]] },
+  { name: "Design by Palette", tags: [["blue", "Blue"], ["green", "Green"], ["brown", "Brown"], ["pink", "Pink"], ["grey", "Grey"]] },
+  { name: "Design by Material", tags: [["iron", "Iron"], ["rattan", "Rattan"], ["realistic-faux-shagreen", "Shagreen"], ["veneer", "Veneer"]] },
+];
+const ROOMS = ["living_room", "dining_room", "bedroom", "kitchen", "bathroom", "entryway", "office"];
+const PAGE = 120;
+
+const S = {
+  images: [], byId: new Map(), tagCount: new Map(), overrides: new Map(),
+  must: ["living_room", "blue"], any: [], not: [],
+  status: "all", q: "", sort: "date", credit: "any", shown: PAGE,
+  decisions: new Map(), pw: "", me: "", connected: false, canWrite: false,
+  view: [], openId: null, room: "living_room",
+};
+const $ = (s) => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+};
+const fmtDate = (ms) => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+// Candid resizes on request: ?w= is the width in pixels.
+const sized = (img, w) => `${img.image}?w=${w}`;
+function picture(img, attrs) {
+  const p = el("img", { alt: "", ...attrs });
+  p.addEventListener("error", () => p.replaceWith(el("span", { class: "nop", text: "No preview. Open to check the full image." })), { once: true });
+  return p;
+}
+
+// ---------- decision keys ----------
+const scopeKey = () => S.must.length ? [...S.must].sort().join("+") : "any";
+const safe = (s) => s.replace(/[^A-Za-z0-9_\-.~:@+]/g, "_");
+const decKey = (scope, id) => safe(scope) + "__" + safe(id);
+const decisionFor = (id, scope = scopeKey()) => S.decisions.get(decKey(scope, id));
+const scopeLabel = (scope) => scope === "any" ? "no required tags" : scope.split("+").join(" + ");
+
+// ---------- photographer: a team entry overrides the caption credit ----------
+function pg(img) {
+  const o = S.overrides.get(safe(img.id));
+  return o ? { name: o.name || "", how: "manual", by: o.by, at: o.at } : { name: img.photographer, how: img.creditHow };
+}
+
+// ---------- tag hygiene ----------
+const norm = (t) => t.toLowerCase().replace(/[-_\s]+/g, "").replace(/grey/g, "gray").replace(/^bath$/, "bathroom");
+let variants = new Map();
+function buildVariants() {
+  const groups = new Map();
+  for (const t of S.tagCount.keys()) {
+    const k = norm(t);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+  variants = new Map();
+  for (const list of groups.values()) if (list.length > 1) for (const t of list) variants.set(t, list.filter((x) => x !== t));
+}
+
+// ---------- filtering ----------
+function matches(img) {
+  const tags = img._set;
+  for (const t of S.must) if (!tags.has(t)) return false;
+  if (S.any.length && !S.any.some((t) => tags.has(t))) return false;
+  for (const t of S.not) if (tags.has(t)) return false;
+  return true;
+}
+function textMatch(img) {
+  if (!S.q) return true;
+  const q = S.q.toLowerCase().replace(/^@/, "");
+  return img.caption.toLowerCase().includes(q) || img.user.toLowerCase().includes(q) || pg(img).name.toLowerCase().includes(q) ||
+    img.products.some((p) => p.toLowerCase().includes(q)) || img.id.includes(q);
+}
+function statusOf(img) { return decisionFor(img.id)?.status || "unreviewed"; }
+
+function compute() {
+  const base = S.images.filter((i) => matches(i) && textMatch(i) &&
+    (S.credit === "any" || (S.credit === "has" ? !!pg(i).name : S.credit === "manual" ? pg(i).how === "manual" : !pg(i).name)));
+  const counts = { all: base.length, unreviewed: 0, keep: 0, remove: 0 };
+  for (const i of base) counts[statusOf(i)]++;
+  let view = S.status === "all" ? base : base.filter((i) => statusOf(i) === S.status);
+  view = [...view];
+  if (S.sort === "old") view.sort((a, b) => a.date - b.date);
+  else if (S.sort === "user") view.sort((a, b) => a.user.localeCompare(b.user) || b.date - a.date);
+  else if (S.sort === "photographer") view.sort((a, b) => { const x = pg(a).name, y = pg(b).name; return (!x - !y) || x.toLowerCase().localeCompare(y.toLowerCase()) || b.date - a.date; });
+  else view.sort((a, b) => b.date - a.date);
+  S.view = view;
+  return counts;
+}
+
+// ---------- render ----------
+function render() {
+  renderInputs();
+  renderPresets();
+  const counts = compute();
+
+  const q = $("#query"); q.replaceChildren();
+  if (!S.must.length && !S.any.length && !S.not.length) q.append(el("span", { text: "All approved images" }));
+  S.must.forEach((t, i) => { if (i) q.append(el("span", { class: "op", text: "and" })); q.append(el("span", { class: "chip must", text: t })); });
+  if (S.any.length) { if (S.must.length) q.append(el("span", { class: "op", text: "and any of" })); else q.append(el("span", { class: "op", text: "any of" }));
+    S.any.forEach((t) => q.append(el("span", { class: "chip", text: t }))); }
+  if (S.not.length) { q.append(el("span", { class: "op", text: "without" })); S.not.forEach((t) => q.append(el("span", { class: "chip not", text: t }))); }
+
+  const sc = $("#scope"); sc.replaceChildren();
+  sc.append("Keep / Remove marks are saved for the placement ", el("b", { text: scopeLabel(scopeKey()) }),
+    ", shared with everyone on this page. ",
+    el("span", { text: `${counts.all} image${counts.all === 1 ? "" : "s"} match, ${counts.unreviewed} still to review.` }));
+
+  const pr = $("#progress"); pr.replaceChildren();
+  if (counts.all) {
+    pr.append(el("span", { class: "k", style: `width:${(counts.keep / counts.all) * 100}%` }), el("span", { class: "r", style: `width:${(counts.remove / counts.all) * 100}%` }));
+  }
+
+  const tabs = $("#tabs"); tabs.replaceChildren();
+  for (const [k, label, dot] of [["all", "All", ""], ["unreviewed", "To review", "dot"], ["keep", "Keep", "dot keep"], ["remove", "Remove", "dot remove"]]) {
+    tabs.append(el("button", { class: "tab", type: "button", "aria-pressed": String(S.status === k), onclick: () => { S.status = k; S.shown = PAGE; render(); } },
+      dot ? el("span", { class: dot }) : null, label, el("span", { class: "n", text: counts[k] })));
+  }
+
+  const grid = $("#grid"); grid.replaceChildren();
+  const slice = S.view.slice(0, S.shown);
+  for (const img of slice) grid.append(tile(img));
+  $("#moreBtn").hidden = S.view.length <= S.shown;
+  $("#moreBtn").textContent = `Show more (${S.view.length - S.shown} left)`;
+
+  const empty = $("#empty");
+  if (!S.images.length) { empty.hidden = false; empty.replaceChildren(el("b", { text: "Loading images from Candid…" }), "Reading the latest approved images from the Candid feed."); }
+  else if (!S.view.length) {
+    empty.hidden = false;
+    empty.replaceChildren(el("b", { text: counts.all ? "Nothing in this status" : "No images match this filter" }),
+      counts.all ? "Switch tabs above to see the other images." : "Remove a tag, or check the tag spelling hints in the filter panel.");
+  } else empty.hidden = true;
+  if (S.openId) renderDrawer();
+}
+
+function tile(img) {
+  const d = decisionFor(img.id);
+  const st = d?.status;
+  const t = el("article", { class: "tile" + (st ? " " + st : ""), "data-id": img.id });
+  const ph = el("button", { class: "ph", type: "button", "aria-label": `Open image by @${img.user}`, onclick: () => openDrawer(img.id) });
+  ph.append(picture(img, { src: sized(img, 400), srcset: `${sized(img, 400)} 400w, ${sized(img, 800)} 800w`, sizes: "(max-width: 480px) 50vw, 220px", loading: "lazy", decoding: "async" }));
+  if (st) ph.append(el("span", { class: "badge " + st, text: st }));
+  t.append(ph, el("div", { class: "info" }, el("span", { class: "user", text: "@" + img.user }),
+    (() => { const c = pg(img); return el("span", { class: "note" + (c.name ? " cred" : ""), text: c.name ? (c.how === "manual" ? "✎ " : "📷 ") + c.name : "No photographer found" }); })(),
+    d?.note ? el("span", { class: "note", text: d.note }) : null));
+  t.append(el("div", { class: "acts" },
+    el("button", { class: "act keep" + (st === "keep" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "keep") }, "Keep"),
+    el("button", { class: "act remove" + (st === "remove" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "remove") }, "Remove")));
+  return t;
+}
+
+function renderInputs() {
+  for (const kind of ["must", "any", "not"]) {
+    const box = document.querySelector(`.taginput[data-kind="${kind}"]`);
+    box.querySelectorAll(".chip").forEach((c) => c.remove());
+    const input = box.querySelector("input");
+    for (const t of S[kind]) {
+      box.insertBefore(el("span", { class: "chip" + (kind === "must" ? " must" : kind === "not" ? " not" : "") },
+        el("span", { text: t }),
+        el("button", { type: "button", "aria-label": `Remove ${t}`, onclick: () => { S[kind] = S[kind].filter((x) => x !== t); S.shown = PAGE; render(); } }, "×")), input);
+    }
+  }
+  const hints = $("#hints"); hints.replaceChildren();
+  for (const t of [...S.must, ...S.any]) {
+    const n = S.tagCount.get(t) || 0;
+    const alts = (variants.get(t) || []).filter((a) => S.tagCount.get(a));
+    if (!n && !alts.length && S.images.length) hints.append(el("div", { class: "hint" }, el("span", {}, "No approved image has the tag ", el("span", { class: "tag", text: t }), ".")));
+    if (alts.length) {
+      const h = el("div", { class: "hint" });
+      h.append(el("span", {}, el("span", { class: "tag", text: t }), ` is on ${n} image${n === 1 ? "" : "s"}. Similar tag${alts.length > 1 ? "s" : ""}: `,
+        ...alts.flatMap((a, i) => [i ? ", " : "", el("span", { class: "tag", text: a }), ` (${S.tagCount.get(a)})`]), "."));
+      h.append(el("span", { text: "The site only reads the exact tag, so images under a variant spelling don't show up." }));
+      h.append(el("button", { class: "textbtn", type: "button", onclick: () => showVariantGap(t, alts) }, "Show images with the variant only"));
+      hints.append(h);
+    }
+  }
+}
+
+function showVariantGap(t, alts) {
+  // images tagged with a variant but not with the exact tag
+  S.must = S.must.filter((x) => x !== t);
+  S.any = [...new Set([...S.any.filter((x) => x !== t), ...alts])];
+  S.not = [...new Set([...S.not, t])];
+  S.shown = PAGE; render();
+  toast(`Showing images tagged ${alts.join(" / ")} but not ${t}`);
+}
+
+function renderPresets() {
+  const box = $("#presets"); box.replaceChildren();
+  const room = S.room;
+  for (const sec of SECTIONS) {
+    const g = el("div", { class: "preset-group" }, el("h3", { text: sec.name }));
+    const row = el("div", { class: "row" });
+    for (const [tag, label] of sec.tags) {
+      const must = tag ? [room, tag] : [room];
+      const on = !S.any.length && !S.not.length && S.must.length === must.length && must.every((m) => S.must.includes(m));
+      const n = S.images.length ? S.images.filter((i) => must.every((m) => i._set.has(m))).length : "";
+      row.append(el("button", { class: "pbtn" + (on ? " on" : ""), type: "button", onclick: () => { S.must = must; S.any = []; S.not = []; S.status = "all"; S.shown = PAGE; render(); } },
+        label, el("small", { text: n })));
+    }
+    g.append(row); box.append(g);
+  }
+}
+
+// ---------- drawer ----------
+function openDrawer(id) { S.openId = id; $("#scrim").hidden = false; renderDrawer(); }
+function closeDrawer() { S.openId = null; $("#scrim").hidden = true; $("#scrim").replaceChildren(); }
+function step(dir) {
+  const i = S.view.findIndex((x) => x.id === S.openId);
+  const next = S.view[i + dir];
+  if (next) { S.openId = next.id; if (i + dir >= S.shown) { S.shown += PAGE; render(); } else renderDrawer(); }
+}
+function renderDrawer() {
+  const img = S.byId.get(S.openId); if (!img) return closeDrawer();
+  const d = decisionFor(img.id);
+  const scrim = $("#scrim");
+  const typing = document.activeElement;
+  if (typing && scrim.contains(typing) && typing.matches("textarea, input") && typing.dataset.id === img.id) return; // don't clobber text being typed
+  const drawer = el("div", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": "Image details" });
+  const idx = S.view.findIndex((x) => x.id === img.id);
+  drawer.append(el("div", { class: "top" },
+    el("span", { class: "stamp", text: idx >= 0 ? `${idx + 1} of ${S.view.length}` : "" }),
+    el("div", { class: "nav" },
+      el("button", { class: "btn", type: "button", onclick: () => step(-1), disabled: idx <= 0, "aria-label": "Previous image" }, "←"),
+      el("button", { class: "btn", type: "button", onclick: () => step(1), disabled: idx < 0 || idx >= S.view.length - 1, "aria-label": "Next image" }, "→"),
+      el("button", { class: "btn", type: "button", onclick: closeDrawer }, "Close"))));
+  drawer.append(el("a", { class: "bigwrap", href: img.image, target: "_blank", rel: "noopener", title: "Open the full-size image" },
+    picture(img, { class: "big", src: sized(img, 1200), alt: `Image by @${img.user}` })));
+  drawer.append(el("div", { class: "links" },
+    el("a", { href: img.image, target: "_blank", rel: "noopener" }, "Full-size image ↗"),
+    img.link ? el("a", { href: img.link, target: "_blank", rel: "noopener" }, "Original post ↗") : null,
+    el("span", { class: "stamp", text: `@${img.user} · ${fmtDate(img.date)} · ID ${img.id}` })));
+
+  drawer.append(el("h3", { text: "Photographer" }), photographerLine(img), photographerForm(img));
+  drawer.append(el("h3", { text: `Decision for ${scopeLabel(scopeKey())}` }));
+  drawer.append(el("div", { class: "decide" },
+    el("button", { class: "act keep" + (d?.status === "keep" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "keep", true) }, "Keep ", el("span", { class: "kbd", text: "K" })),
+    el("button", { class: "act remove" + (d?.status === "remove" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "remove", true) }, "Remove ", el("span", { class: "kbd", text: "R" }))));
+  const note = el("textarea", { id: "note", placeholder: "Note, e.g. not actually pink, untag pink", "data-id": img.id, disabled: !S.canWrite });
+  note.value = d?.note || "";
+  note.addEventListener("change", () => saveNote(img.id, note.value));
+  drawer.append(el("label", { class: "lbl", for: "note" }, "Note ", el("small", { text: "saved when you click away" })), note);
+  if (d) drawer.append(el("div", { class: "stamp" }, `Marked ${d.status} ${fmtDate(d.at)}${d.by ? " by " + d.by : ""}`));
+
+  const others = [...S.decisions.values()].filter((x) => x.mediaId === img.id && x.scope !== scopeKey());
+  if (others.length) {
+    const o = el("div", { class: "others" });
+    for (const x of others) o.append(el("span", {}, el("span", { class: "dot " + x.status, style: "display:inline-block;margin-right:6px" }), `${x.status === "keep" ? "Kept" : "Removed"} in `, el("b", { text: scopeLabel(x.scope) }), x.note ? ` — ${x.note}` : ""));
+    drawer.append(el("h3", { text: "Other placements" }), o);
+  }
+
+  drawer.append(el("h3", { text: `Tags (${img.tags.length})` }));
+  const tl = el("div", { class: "taglist" });
+  for (const t of img.tags) tl.append(el("button", { class: "chip" + (S.must.includes(t) || S.any.includes(t) ? " hit" : ""), type: "button", title: "Add to Must have", onclick: () => { if (!S.must.includes(t)) { S.must = [...S.must, t]; S.shown = PAGE; render(); toast(`Added ${t} to Must have`); } } }, t));
+  drawer.append(tl);
+  if (img.products.length) drawer.append(el("h3", { text: "Tagged products" }), el("div", { class: "taglist" }, ...img.products.map((p) => el("span", { class: "chip", text: p }))));
+  if (img.caption) drawer.append(el("h3", { text: "Caption" }), el("p", { class: "cap", text: img.caption }));
+  drawer.append(el("p", { class: "stamp" }, "Keys: ", el("span", { class: "kbd", text: "←" }), " ", el("span", { class: "kbd", text: "→" }), " move, ", el("span", { class: "kbd", text: "K" }), " keep, ", el("span", { class: "kbd", text: "R" }), " remove, ", el("span", { class: "kbd", text: "Esc" }), " close"));
+
+  scrim.replaceChildren(drawer);
+}
+const HOW = { manual: "entered by the team", label: "credited in the caption", after: "handle next to a camera emoji", inferred: "guess: a tagged account with photo in its name" };
+function photographerLine(img) {
+  const c = pg(img);
+  if (!c.name) return el("p", { class: "cap", text: c.how === "manual" ? "The team marked this image as having no photographer credit." : "No photographer credit found in the caption." });
+  const isHandle = !/\s/.test(c.name);
+  return el("div", { class: "links" },
+    isHandle ? el("a", { href: `https://www.instagram.com/${encodeURIComponent(c.name.replace(/^@/, ""))}/`, target: "_blank", rel: "noopener" }, "@" + c.name.replace(/^@/, "") + " ↗") : el("b", { text: c.name }),
+    el("span", { class: "stamp", text: HOW[c.how] || "" }),
+    el("button", { class: "textbtn", type: "button", onclick: () => { S.q = c.name; $("#q").value = c.name; S.shown = PAGE; render(); toast(`Showing images by ${c.name}`); } }, "More by this photographer"));
+}
+function photographerForm(img) {
+  const c = pg(img), manual = c.how === "manual";
+  const input = el("input", { id: "pg", class: "pginput", "data-id": img.id, placeholder: "Instagram handle or name", autocomplete: "off", list: "pglist", disabled: !S.canWrite });
+  input.value = c.name;
+  const save = () => savePhotographer(img, input.value);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); input.blur(); } });
+  const caption = img.photographer ? `the caption credit (${img.photographer})` : "the caption (no credit)";
+  return el("div", { class: "pgform" },
+    el("label", { class: "lbl", for: "pg" }, manual ? "Edit the team's entry" : "Correct or add the photographer", el("small", { text: "shared with everyone" })),
+    el("div", { class: "row" }, input, el("button", { class: "btn", type: "button", disabled: !S.canWrite, onclick: save }, "Save")),
+    manual ? el("button", { class: "textbtn", type: "button", disabled: !S.canWrite, onclick: () => clearPhotographer(img) }, `Go back to ${caption}`) : null,
+    manual && c.by ? el("span", { class: "stamp" }, `Entered ${fmtDate(c.at)} by ${c.by}`) : null);
+}
+async function savePhotographer(img, raw) {
+  if (!S.canWrite) return toast("Saving isn't available right now.");
+  const name = raw.trim().replace(/^@/, "");
+  const cur = pg(img);
+  if (cur.how !== "manual" && name === img.photographer) return toast("That matches the caption credit already.");
+  const body = { mediaId: img.id, name, by: S.me, at: Date.now() };
+  try {
+    S.overrides.set(safe(img.id), body); render();
+    await write([{ op: "set", collection: "photographers", key: safe(img.id), value: body }]);
+    toast(name ? `Photographer set to ${name}` : "Marked as no photographer");
+  } catch (e) { S.overrides.delete(safe(img.id)); render(); writeFailed(e); }
+}
+async function clearPhotographer(img) {
+  if (!S.canWrite) return;
+  const prev = S.overrides.get(safe(img.id));
+  try { S.overrides.delete(safe(img.id)); render(); await write([{ op: "delete", collection: "photographers", key: safe(img.id) }]); toast("Using the caption credit again"); }
+  catch (e) { if (prev) S.overrides.set(safe(img.id), prev); render(); writeFailed(e); }
+}
+
+// ---------- writes ----------
+async function api(method, body) {
+  const r = await fetch("/api/state", { method, headers: { "X-Team-Password": S.pw, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), { status: r.status });
+  return data;
+}
+const write = (ops) => api("POST", { ops });
+async function decide(id, status, advance = false) {
+  if (!S.canWrite) return toast("Saving isn't available right now.");
+  const scope = scopeKey(), key = decKey(scope, id);
+  const cur = S.decisions.get(key);
+  try {
+    if (cur?.status === status && !advance) { S.decisions.delete(key); render(); await write([{ op: "delete", collection: "decisions", key }]); }
+    else {
+      const body = { mediaId: id, scope, status, note: cur?.note || "", by: S.me, at: Date.now() };
+      S.decisions.set(key, body); render();
+      await write([{ op: "set", collection: "decisions", key, value: body }]);
+    }
+    if (advance) step(1);
+  } catch (e) { if (cur) S.decisions.set(key, cur); else S.decisions.delete(key); render(); writeFailed(e); }
+}
+async function saveNote(id, text) {
+  if (!S.canWrite) return;
+  const scope = scopeKey(), key = decKey(scope, id);
+  const cur = S.decisions.get(key);
+  const body = { mediaId: id, scope, status: cur?.status || "keep", note: text.trim(), by: S.me, at: Date.now() };
+  if (!cur && !text.trim()) return;
+  try { S.decisions.set(key, body); await write([{ op: "set", collection: "decisions", key, value: body }]); toast(cur ? "Note saved" : "Note saved and marked Keep"); render(); }
+  catch (e) { if (cur) S.decisions.set(key, cur); else S.decisions.delete(key); render(); writeFailed(e); }
+}
+function writeFailed(e) {
+  if (e?.status === 401) { toast("The team password changed. Sign in again."); signOut(); }
+  else toast("Couldn't save that mark. Try again in a moment.");
+}
+
+// ---------- export ----------
+function csvCell(v) { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+async function exportList() {
+  const scope = scopeKey();
+  const rows = [...S.decisions.values()].filter((d) => d.scope === scope && d.status === "remove");
+  if (!rows.length) return toast(`No images are marked Remove for ${scopeLabel(scope)} yet.`);
+  const lines = [["placement", "media_id", "user", "photographer", "photographer_source", "original_post", "image", "note", "marked_by", "marked_on"].join(",")];
+  for (const r of rows) {
+    const img = S.byId.get(r.mediaId) || {};
+    lines.push([scope, r.mediaId, img.user ? "@" + img.user : "", img.id ? pg(img).name : "", img.id ? HOW[pg(img).how] || "" : "", img.link, img.image, r.note, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
+  }
+  const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
+  const a = el("a", { href: url, download: `candid-remove-${safe(scope)}.csv` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Downloaded ${rows.length} row${rows.length === 1 ? "" : "s"} as CSV`);
+}
+
+// ---------- misc ----------
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600); }
+
+function addTag(kind, raw) {
+  const t = raw.trim().toLowerCase(); if (!t) return;
+  for (const k of ["must", "any", "not"]) S[k] = S[k].filter((x) => x !== t);
+  S[kind] = [...S[kind], t]; S.shown = PAGE; render();
+}
+document.querySelectorAll(".taginput").forEach((box) => {
+  const input = box.querySelector("input"), kind = box.dataset.kind;
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(kind, input.value); input.value = ""; }
+    else if (e.key === "Backspace" && !input.value && S[kind].length) { S[kind] = S[kind].slice(0, -1); render(); }
+  });
+  input.addEventListener("change", () => { if (S.tagCount.has(input.value.trim())) { addTag(kind, input.value); input.value = ""; } });
+  box.addEventListener("click", (e) => { if (e.target === box) input.focus(); });
+});
+$("#clearAll").addEventListener("click", () => { S.must = []; S.any = []; S.not = []; S.shown = PAGE; render(); });
+$("#q").addEventListener("input", (e) => { S.q = e.target.value.trim(); S.shown = PAGE; render(); });
+$("#sort").addEventListener("change", (e) => { S.sort = e.target.value; render(); });
+$("#credit").addEventListener("change", (e) => { S.credit = e.target.value; S.shown = PAGE; render(); });
+$("#moreBtn").addEventListener("click", () => { S.shown += PAGE; render(); });
+$("#exportBtn").addEventListener("click", exportList);
+$("#scrim").addEventListener("click", (e) => { if (e.target.id === "scrim") closeDrawer(); });
+$("#room").addEventListener("change", (e) => {
+  const old = S.room; S.room = e.target.value;
+  if (S.must.includes(old)) S.must = S.must.map((t) => (t === old ? S.room : t));
+  S.shown = PAGE; render();
+});
+document.addEventListener("keydown", (e) => {
+  if (!S.openId || e.target.closest("textarea,input")) return;
+  if (e.key === "Escape") closeDrawer();
+  else if (e.key === "ArrowRight") step(1);
+  else if (e.key === "ArrowLeft") step(-1);
+  else if ((e.key === "k" || e.key === "K") && S.canWrite) decide(S.openId, "keep", true);
+  else if ((e.key === "r" || e.key === "R") && S.canWrite) decide(S.openId, "remove", true);
+});
+
+// ---------- boot ----------
+async function loadCatalog() {
+  try {
+    const cat = await fetch("/api/catalog").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+    S.images = cat.images.map((i) => ({ photographer: "", creditHow: "", ...i, _set: new Set(i.tags) }));
+    S.byId = new Map(S.images.map((i) => [i.id, i]));
+    for (const i of S.images) for (const t of i.tags) S.tagCount.set(t, (S.tagCount.get(t) || 0) + 1);
+    buildVariants();
+    const dlst = $("#taglist");
+    for (const [t, n] of [...S.tagCount].sort((a, b) => b[1] - a[1])) dlst.append(el("option", { value: t, label: `${n} images` }));
+    const roomSel = $("#room");
+    for (const r of ROOMS) roomSel.append(el("option", { value: r, text: `${r} (${S.tagCount.get(r) || 0})` }));
+    roomSel.value = S.room;
+    const credited = S.images.filter((i) => i.photographer).length;
+    const pgl = el("datalist", { id: "pglist" });
+    for (const n of [...new Set(S.images.map((i) => i.photographer).filter(Boolean))].sort()) pgl.append(el("option", { value: n }));
+    document.body.append(pgl);
+    $("#syncMeta").textContent = `${S.images.length.toLocaleString()} approved images · ${credited.toLocaleString()} with a photographer · read from Candid ${new Date(cat.syncedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+    render();
+  } catch {
+    $("#syncMeta").textContent = "Couldn't load the image catalog.";
+    const empty = $("#empty"); empty.hidden = false;
+    empty.replaceChildren(el("b", { text: "The image catalog didn't load" }), "Reload the page. If it keeps failing, the Candid feed may be down.");
+  }
+}
+// ---------- sign-in and shared marks ----------
+const store = {
+  get: (k) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
+};
+function applyState(st) {
+  S.decisions = new Map(Object.entries(st.decisions || {}));
+  S.overrides = new Map(Object.entries(st.photographers || {}));
+}
+async function connect(pw, name) {
+  S.pw = pw; S.me = name;
+  applyState(await api("GET"));
+  S.connected = true; S.canWrite = true;
+  store.set("candid.pw", pw); store.set("candid.name", name);
+  $("#gate").hidden = true; $("#roNote").hidden = true;
+  $("#who").replaceChildren(el("span", { text: name }), el("button", { class: "textbtn", type: "button", onclick: signOut }, "Sign out"));
+  render();
+}
+function signOut() {
+  S.connected = false; S.canWrite = false; S.pw = "";
+  store.del("candid.pw");
+  $("#who").replaceChildren();
+  showGate();
+}
+function showGate(msg) {
+  $("#gate").hidden = false;
+  $("#gateName").value = S.me || store.get("candid.name");
+  const err = $("#gateErr"); err.hidden = !msg; err.textContent = msg || "";
+  ($("#gateName").value ? $("#gatePw") : $("#gateName")).focus();
+}
+$("#gateForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = $("#gatePw").value, name = $("#gateName").value.trim();
+  if (!pw || !name) return;
+  try { await connect(pw, name); $("#gatePw").value = ""; }
+  catch (err) { showGate(err.status === 401 ? "That password isn't right." : err.message || "Couldn't reach the server."); }
+});
+// Pick up teammates' marks every 15 seconds while the tab is open.
+async function refresh() {
+  if (!S.connected || document.hidden) return;
+  const typing = document.activeElement?.matches?.("textarea, input");
+  try { applyState(await api("GET")); if (!typing) render(); }
+  catch (e) { if (e.status === 401) signOut(); }
+}
+setInterval(refresh, 15000);
+document.addEventListener("visibilitychange", refresh);
+
+render();
+loadCatalog();
+if (store.get("candid.pw") && store.get("candid.name")) connect(store.get("candid.pw"), store.get("candid.name")).catch(() => showGate());
+else showGate();
+</script>
