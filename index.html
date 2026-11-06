@@ -101,6 +101,7 @@ label.lbl small { color: var(--muted); font-weight: 400; }
 .pbtn.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
 .pbtn.on small { color: inherit; opacity: .8; }
 select.sel { border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 6px 8px; }
+select.sel.wide { width: 100%; min-width: 0; }
 .textbtn { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12.5px; font-weight: 600; }
 
 .hint { border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
@@ -199,6 +200,19 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
         <select id="room" class="sel"></select>
       </div>
       <div class="presets" id="presets"></div>
+    </section>
+
+    <section class="box">
+      <h2>All tags</h2>
+      <label class="lbl" for="tagPick">Tag and total images <small id="tagTotal"></small></label>
+      <select id="tagPick" class="sel wide"></select>
+      <div class="row">
+        <label for="tagSort" class="lbl" style="font-weight:500">Sort</label>
+        <select id="tagSort" class="sel" aria-label="Sort tags">
+          <option value="count">Most images</option>
+          <option value="name">A to Z</option>
+        </select>
+      </div>
     </section>
 
     <section class="box">
@@ -470,6 +484,16 @@ function renderPresets() {
   }
 }
 
+function renderTagPick() {
+  const sel = $("#tagPick");
+  const list = [...S.tagCount];
+  if ($("#tagSort").value === "name") list.sort((a, b) => a[0].localeCompare(b[0]));
+  else list.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  sel.replaceChildren(el("option", { value: "", text: "Add a tag to Must have…" }));
+  for (const [t, n] of list) sel.append(el("option", { value: t, text: `${t} (${n.toLocaleString()})` }));
+  $("#tagTotal").textContent = `${list.length.toLocaleString()} tags`;
+}
+
 // ---------- drawer ----------
 function openDrawer(id) { S.openId = id; $("#scrim").hidden = false; renderDrawer(); }
 function closeDrawer() { S.openId = null; $("#scrim").hidden = true; $("#scrim").replaceChildren(); }
@@ -641,6 +665,11 @@ document.querySelectorAll(".taginput").forEach((box) => {
   input.addEventListener("change", () => { if (S.tagCount.has(input.value.trim())) { addTag(kind, input.value); input.value = ""; } });
   box.addEventListener("click", (e) => { if (e.target === box) input.focus(); });
 });
+$("#tagSort").addEventListener("change", renderTagPick);
+$("#tagPick").addEventListener("change", (e) => {
+  const t = e.target.value; e.target.value = ""; if (!t) return;
+  addTag("must", t); toast(`Added ${t} to Must have`);
+});
 $("#clearAll").addEventListener("click", () => { S.must = []; S.any = []; S.not = []; S.shown = PAGE; render(); });
 $("#q").addEventListener("input", (e) => { S.q = e.target.value.trim(); S.shown = PAGE; render(); });
 $("#sort").addEventListener("change", (e) => { S.sort = e.target.value; render(); });
@@ -675,6 +704,7 @@ async function loadCatalog() {
     const roomSel = $("#room");
     for (const r of ROOMS) roomSel.append(el("option", { value: r, text: `${r} (${S.tagCount.get(r) || 0})` }));
     roomSel.value = S.room;
+    renderTagPick();
     const credited = S.images.filter((i) => i.photographer).length;
     const pgl = el("datalist", { id: "pglist" });
     for (const n of [...new Set(S.images.map((i) => i.photographer).filter(Boolean))].sort()) pgl.append(el("option", { value: n }));
