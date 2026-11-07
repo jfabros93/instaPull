@@ -1,4 +1,4 @@
-"""Shared review state: Keep/Remove decisions and photographer entries.
+"""Shared review state: Keep/Remove decisions, photographer entries and tag changes.
 
 Each collection is one Redis hash (field = document key, value = JSON). On Vercel the
 Upstash Redis integration provides KV_REST_API_URL / KV_REST_API_TOKEN. Without them
@@ -6,7 +6,7 @@ Upstash Redis integration provides KV_REST_API_URL / KV_REST_API_TOKEN. Without 
 """
 import json, os, threading, urllib.request
 
-COLLECTIONS = ("decisions", "photographers")
+COLLECTIONS = ("decisions", "photographers", "tagqc")
 PREFIX = "candid:"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEED = os.path.join(ROOT, "seed.json")

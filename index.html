@@ -141,6 +141,7 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .badge { position: absolute; top: 6px; left: 6px; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 2px 6px; letter-spacing: .03em; text-transform: uppercase; }
 .badge.keep { background: var(--keep); color: var(--panel); }
 .badge.remove { background: var(--remove); color: var(--panel); }
+.badge.tags { left: auto; right: 6px; background: var(--ink); color: var(--panel); text-transform: none; letter-spacing: 0; }
 .tile .info { padding: 8px 8px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tile .user { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile .note.cred { color: var(--accent); }
@@ -170,6 +171,19 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .drawer .taglist { display: flex; flex-wrap: wrap; gap: 5px; }
 .drawer .taglist button.chip { border: 1px solid var(--line); padding: 2px 8px; background: var(--chip); }
 .drawer .taglist button.chip.hit { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.qctag { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 4px; background: var(--chip); font-family: var(--font-tag); font-size: 12px; }
+.qctag button { border: 0; background: none; padding: 2px 8px; font: inherit; color: inherit; }
+.qctag .name { padding: 2px 8px; }
+.qctag button.x { padding: 2px 7px; border-left: 1px solid var(--line); color: var(--muted); }
+.qctag button.x:hover { color: var(--remove); }
+.qctag.hit { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.qctag.del { background: var(--remove-soft); color: var(--remove); border-color: var(--remove); }
+.qctag.del button:first-child { text-decoration: line-through; }
+.qctag.del button.x { color: var(--remove); }
+.qctag.add { background: var(--keep-soft); color: var(--keep); border-color: var(--keep); }
+.qctag.add button.x { color: var(--keep); }
+.qctag small { font-family: var(--font-ui); opacity: .8; margin-left: 6px; }
+@media (pointer: coarse) { .qctag button, .qctag .name { padding-block: 6px; } .qctag button.x { padding-inline: 12px; } }
 .drawer .decide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drawer .decide .act { padding: 10px 0; font-size: 14px; }
 .drawer textarea { width: 100%; min-height: 70px; border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); padding: 8px; resize: vertical; }
@@ -249,7 +263,14 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
           <option value="none">No photographer found</option>
           <option value="manual">Entered by the team</option>
         </select>
+        <select id="tagQc" class="sel" aria-label="Tag changes">
+          <option value="any">Any tag changes</option>
+          <option value="has">Has tag changes</option>
+          <option value="add">Tags to add</option>
+          <option value="remove">Tags to remove</option>
+        </select>
         <button class="btn" id="exportBtn" type="button">Export removal list</button>
+        <button class="btn" id="tagExportBtn" type="button">Export tag changes</button>
       </div>
       <div id="roNote" class="ro" hidden>Review marks aren't available right now. Reload the page to try again.</div>
     </section>
@@ -287,8 +308,8 @@ const PAGE = 120;
 const S = {
   images: [], byId: new Map(), tagCount: new Map(), overrides: new Map(),
   must: ["living_room", "blue"], any: [], not: [],
-  status: "all", q: "", sort: "date", credit: "any", shown: PAGE,
-  decisions: new Map(), pw: "", me: "", connected: false, canWrite: false,
+  status: "all", q: "", sort: "date", credit: "any", tagQc: "any", shown: PAGE,
+  decisions: new Map(), tagMarks: new Map(), tagIdx: new Map(), pw: "", me: "", connected: false, canWrite: false,
   view: [], openId: null, room: "living_room",
 };
 const $ = (s) => document.querySelector(s);
@@ -339,6 +360,33 @@ function buildVariants() {
   for (const list of groups.values()) if (list.length > 1) for (const t of list) variants.set(t, list.filter((x) => x !== t));
 }
 
+// ---------- tag changes: saved per image, not per placement ----------
+const TAG_RE = /^[a-z0-9_-]+$/;
+const tagKey = (id, tag) => safe(id) + "__" + tag;
+// A mark stops counting once Candid's feed shows the change, or the image leaves the feed.
+function indexTagMarks() {
+  S.tagIdx = new Map();
+  for (const d of S.tagMarks.values()) {
+    const img = S.byId.get(d.mediaId);
+    if (!img || (d.action === "add") === img._set.has(d.tag)) continue;
+    if (!S.tagIdx.has(img.id)) S.tagIdx.set(img.id, []);
+    S.tagIdx.get(img.id).push(d);
+  }
+}
+const tagChanges = (id) => S.tagIdx.get(id) || [];
+function tagQcMatch(img) {
+  if (S.tagQc === "any") return true;
+  const list = tagChanges(img.id);
+  return S.tagQc === "has" ? list.length > 0 : list.some((d) => d.action === S.tagQc);
+}
+// The site reads exact tags, so point out new tags and other spellings before they're applied.
+function tagHint(t) {
+  const n = S.tagCount.get(t) || 0;
+  const alts = [...S.tagCount.keys()].filter((x) => x !== t && norm(x) === norm(t));
+  if (alts.length) return `${n ? n + " images, " : "new tag, "}also spelled ${alts.join(", ")}`;
+  return n ? `${n} images` : "new tag";
+}
+
 // ---------- filtering ----------
 function matches(img) {
   const tags = img._set;
@@ -357,6 +405,7 @@ function statusOf(img) { return decisionFor(img.id)?.status || "unreviewed"; }
 
 function compute() {
   const base = S.images.filter((i) => matches(i) && textMatch(i) &&
+    tagQcMatch(i) &&
     (S.credit === "any" || (S.credit === "has" ? !!pg(i).name : S.credit === "manual" ? pg(i).how === "manual" : !pg(i).name)));
   const counts = { all: base.length, unreviewed: 0, keep: 0, remove: 0 };
   for (const i of base) counts[statusOf(i)]++;
@@ -374,7 +423,10 @@ function compute() {
 function render() {
   renderInputs();
   renderPresets();
+  indexTagMarks();
   const counts = compute();
+  const tagN = tagRows().length;
+  $("#tagExportBtn").textContent = tagN ? `Export tag changes (${tagN})` : "Export tag changes";
 
   const q = $("#query"); q.replaceChildren();
   if (!S.must.length && !S.any.length && !S.not.length) q.append(el("span", { text: "All approved images" }));
@@ -422,6 +474,11 @@ function tile(img) {
   const ph = el("button", { class: "ph", type: "button", "aria-label": `Open image by @${img.user}`, onclick: () => openDrawer(img.id) });
   ph.append(picture(img, { src: sized(img, 400), srcset: `${sized(img, 400)} 400w, ${sized(img, 800)} 800w`, sizes: "(max-width: 480px) 50vw, 220px", loading: "lazy", decoding: "async" }));
   if (st) ph.append(el("span", { class: "badge " + st, text: st }));
+  const changes = tagChanges(img.id);
+  if (changes.length) {
+    const adds = changes.filter((c) => c.action === "add").length, dels = changes.length - adds;
+    ph.append(el("span", { class: "badge tags", title: changes.map((c) => (c.action === "add" ? "Add " : "Remove ") + c.tag).join(", "), text: "Tags" + (adds ? ` +${adds}` : "") + (dels ? ` −${dels}` : "") }));
+  }
   t.append(ph, el("div", { class: "info" }, el("span", { class: "user", text: "@" + img.user }),
     (() => { const c = pg(img); return el("span", { class: "note" + (c.name ? " cred" : ""), text: c.name ? (c.how === "manual" ? "✎ " : "📷 ") + c.name : "No photographer found" }); })(),
     d?.note ? el("span", { class: "note", text: d.note }) : null));
@@ -508,7 +565,9 @@ function renderDrawer() {
   const scrim = $("#scrim");
   const typing = document.activeElement;
   if (typing && scrim.contains(typing) && typing.matches("textarea, input") && typing.dataset.id === img.id) return; // don't clobber text being typed
-  const drawer = el("div", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": "Image details" });
+  const prev = scrim.querySelector(".drawer");
+  const keepScroll = prev?.dataset.id === img.id ? prev.scrollTop : 0;
+  const drawer = el("div", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": "Image details", "data-id": img.id });
   const idx = S.view.findIndex((x) => x.id === img.id);
   drawer.append(el("div", { class: "top" },
     el("span", { class: "stamp", text: idx >= 0 ? `${idx + 1} of ${S.view.length}` : "" }),
@@ -523,12 +582,13 @@ function renderDrawer() {
     img.link ? el("a", { href: img.link, target: "_blank", rel: "noopener" }, "Original post ↗") : null,
     el("span", { class: "stamp", text: `@${img.user} · ${fmtDate(img.date)} · ID ${img.id}` })));
 
+  drawer.append(...tagSection(img));
   drawer.append(el("h3", { text: "Photographer" }), photographerLine(img), photographerForm(img));
   drawer.append(el("h3", { text: `Decision for ${scopeLabel(scopeKey())}` }));
   drawer.append(el("div", { class: "decide" },
     el("button", { class: "act keep" + (d?.status === "keep" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "keep", true) }, "Keep ", el("span", { class: "kbd", text: "K" })),
     el("button", { class: "act remove" + (d?.status === "remove" ? " on" : ""), type: "button", disabled: !S.canWrite, onclick: () => decide(img.id, "remove", true) }, "Remove ", el("span", { class: "kbd", text: "R" }))));
-  const note = el("textarea", { id: "note", placeholder: "Note, e.g. not actually pink, untag pink", "data-id": img.id, disabled: !S.canWrite });
+  const note = el("textarea", { id: "note", placeholder: "Note, e.g. cropped too tight for this section", "data-id": img.id, disabled: !S.canWrite });
   note.value = d?.note || "";
   note.addEventListener("change", () => saveNote(img.id, note.value));
   drawer.append(el("label", { class: "lbl", for: "note" }, "Note ", el("small", { text: "saved when you click away" })), note);
@@ -541,15 +601,40 @@ function renderDrawer() {
     drawer.append(el("h3", { text: "Other placements" }), o);
   }
 
-  drawer.append(el("h3", { text: `Tags (${img.tags.length})` }));
-  const tl = el("div", { class: "taglist" });
-  for (const t of img.tags) tl.append(el("button", { class: "chip" + (S.must.includes(t) || S.any.includes(t) ? " hit" : ""), type: "button", title: "Add to Must have", onclick: () => { if (!S.must.includes(t)) { S.must = [...S.must, t]; S.shown = PAGE; render(); toast(`Added ${t} to Must have`); } } }, t));
-  drawer.append(tl);
   if (img.products.length) drawer.append(el("h3", { text: "Tagged products" }), el("div", { class: "taglist" }, ...img.products.map((p) => el("span", { class: "chip", text: p }))));
   if (img.caption) drawer.append(el("h3", { text: "Caption" }), el("p", { class: "cap", text: img.caption }));
-  drawer.append(el("p", { class: "stamp" }, "Keys: ", el("span", { class: "kbd", text: "←" }), " ", el("span", { class: "kbd", text: "→" }), " move, ", el("span", { class: "kbd", text: "K" }), " keep, ", el("span", { class: "kbd", text: "R" }), " remove, ", el("span", { class: "kbd", text: "Esc" }), " close"));
+  drawer.append(el("p", { class: "stamp" }, "Keys: ", el("span", { class: "kbd", text: "←" }), " ", el("span", { class: "kbd", text: "→" }), " move, ", el("span", { class: "kbd", text: "K" }), " keep, ", el("span", { class: "kbd", text: "R" }), " remove, ", el("span", { class: "kbd", text: "T" }), " add a tag, ", el("span", { class: "kbd", text: "Esc" }), " close"));
 
   scrim.replaceChildren(drawer);
+  drawer.scrollTop = keepScroll;
+  if (S.focusTagAdd) { S.focusTagAdd = false; drawer.querySelector("#tagAdd")?.focus(); }
+}
+function tagSection(img) {
+  const changes = tagChanges(img.id);
+  const removing = new Set(changes.filter((c) => c.action === "remove").map((c) => c.tag));
+  const list = el("div", { class: "taglist" });
+  for (const t of img.tags) {
+    const del = removing.has(t), hit = S.must.includes(t) || S.any.includes(t);
+    list.append(el("span", { class: "qctag" + (del ? " del" : hit ? " hit" : "") },
+      el("button", { type: "button", title: "Add to Must have", onclick: () => { if (!S.must.includes(t)) { S.must = [...S.must, t]; S.shown = PAGE; render(); toast(`Added ${t} to Must have`); } } }, t),
+      el("button", { class: "x", type: "button", disabled: !S.canWrite, title: del ? "Keep this tag" : "Flag this tag to remove", "aria-label": del ? `Keep ${t}` : `Flag ${t} to remove`, onclick: () => setTagMark(img, t, del ? null : "remove") }, del ? "↩" : "×")));
+  }
+  for (const c of changes.filter((c) => c.action === "add")) {
+    list.append(el("span", { class: "qctag add" },
+      el("span", { class: "name" }, "+ " + c.tag, el("small", { text: tagHint(c.tag) })),
+      el("button", { class: "x", type: "button", disabled: !S.canWrite, title: "Don't add this tag", "aria-label": `Don't add ${c.tag}`, onclick: () => setTagMark(img, c.tag, null) }, "×")));
+  }
+  const input = el("input", { id: "tagAdd", class: "pginput", list: "taglist", placeholder: "Tag to add, e.g. living_room", autocomplete: "off", disabled: !S.canWrite });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTagMark(img, input.value); input.value = ""; } });
+  input.addEventListener("change", () => { if (S.tagCount.has(input.value.trim())) { addTagMark(img, input.value); input.value = ""; } });
+  return [
+    el("h3", { text: `Tags (${img.tags.length})` }),
+    list,
+    el("div", { class: "pgform" },
+      el("label", { class: "lbl", for: "tagAdd" }, "Add a missing tag", el("small", { text: "× flags a tag to remove" })),
+      el("div", { class: "row" }, input, el("button", { class: "btn", type: "button", disabled: !S.canWrite, onclick: () => { addTagMark(img, input.value); input.value = ""; } }, "Add"))),
+    el("p", { class: "stamp", text: "Tag changes apply to this image in every placement. Export them to update Candid; each one clears from this list once Candid shows it." + (changes.length ? " Flagged by " + [...new Set(changes.map((c) => c.by).filter(Boolean))].join(", ") + "." : "") }),
+  ];
 }
 const HOW = { manual: "entered by the team", label: "credited in the caption", after: "handle next to a camera emoji", inferred: "guess: a tagged account with photo in its name" };
 function photographerLine(img) {
@@ -624,6 +709,26 @@ async function saveNote(id, text) {
   try { S.decisions.set(key, body); await write([{ op: "set", collection: "decisions", key, value: body }]); toast(cur ? "Note saved" : "Note saved and marked Keep"); render(); }
   catch (e) { if (cur) S.decisions.set(key, cur); else S.decisions.delete(key); render(); writeFailed(e); }
 }
+function addTagMark(img, raw) {
+  const t = raw.trim().toLowerCase();
+  if (!t) return;
+  if (!TAG_RE.test(t) || t.length > 60) return toast("Tags use lowercase letters, numbers, - and _ with no spaces.");
+  S.focusTagAdd = true;
+  if (!img._set.has(t)) return setTagMark(img, t, "add");
+  if (tagChanges(img.id).some((c) => c.tag === t)) return setTagMark(img, t, null);
+  S.focusTagAdd = false;
+  toast(`This image already has ${t}.`);
+}
+async function setTagMark(img, tag, action) {
+  if (!S.canWrite) return toast("Saving isn't available right now.");
+  const key = tagKey(img.id, tag), cur = S.tagMarks.get(key);
+  const body = { mediaId: img.id, tag, action, by: S.me, at: Date.now() };
+  try {
+    if (action) S.tagMarks.set(key, body); else S.tagMarks.delete(key);
+    render();
+    await write([action ? { op: "set", collection: "tagqc", key, value: body } : { op: "delete", collection: "tagqc", key }]);
+  } catch (e) { if (cur) S.tagMarks.set(key, cur); else S.tagMarks.delete(key); render(); writeFailed(e); }
+}
 function writeFailed(e) {
   if (e?.status === 401) { toast("The team password changed. Sign in again."); signOut(); }
   else toast("Couldn't save that mark. Try again in a moment.");
@@ -645,6 +750,30 @@ async function exportList() {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast(`Downloaded ${rows.length} row${rows.length === 1 ? "" : "s"} as CSV`);
+}
+
+// Tag changes for images in the current tag filter (search and dropdowns don't narrow it).
+function tagRows() {
+  const rows = [];
+  for (const [id, list] of S.tagIdx) { const img = S.byId.get(id); if (matches(img)) for (const d of list) rows.push(d); }
+  return rows.sort((a, b) => a.mediaId.localeCompare(b.mediaId) || a.action.localeCompare(b.action) || a.tag.localeCompare(b.tag));
+}
+function exportTagChanges() {
+  const rows = tagRows();
+  const filtered = S.must.length || S.any.length || S.not.length;
+  const total = [...S.tagIdx.values()].reduce((n, l) => n + l.length, 0);
+  if (!rows.length) return toast(total ? `No tag changes in this filter. Clear the filter to export all ${total}.` : "No tag changes yet. Open an image to flag some.");
+  const lines = [["media_id", "action", "tag", "new_tag", "user", "current_tags", "original_post", "image", "marked_by", "marked_on"].join(",")];
+  for (const r of rows) {
+    const img = S.byId.get(r.mediaId);
+    lines.push([r.mediaId, r.action, r.tag, r.action === "add" && !S.tagCount.has(r.tag) ? "yes" : "no", "@" + img.user, img.tags.join(" | "), img.link, img.image, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
+  }
+  const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
+  const a = el("a", { href: url, download: `candid-tag-changes-${filtered ? safe(scopeKey()) : "all"}.csv` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const rest = total - rows.length;
+  toast(`Downloaded ${rows.length} tag change${rows.length === 1 ? "" : "s"}` + (rest ? `. ${rest} more are outside this filter.` : ""));
 }
 
 // ---------- misc ----------
@@ -676,6 +805,8 @@ $("#sort").addEventListener("change", (e) => { S.sort = e.target.value; render()
 $("#credit").addEventListener("change", (e) => { S.credit = e.target.value; S.shown = PAGE; render(); });
 $("#moreBtn").addEventListener("click", () => { S.shown += PAGE; render(); });
 $("#exportBtn").addEventListener("click", exportList);
+$("#tagExportBtn").addEventListener("click", exportTagChanges);
+$("#tagQc").addEventListener("change", (e) => { S.tagQc = e.target.value; S.shown = PAGE; render(); });
 $("#scrim").addEventListener("click", (e) => { if (e.target.id === "scrim") closeDrawer(); });
 $("#room").addEventListener("change", (e) => {
   const old = S.room; S.room = e.target.value;
@@ -683,12 +814,13 @@ $("#room").addEventListener("change", (e) => {
   S.shown = PAGE; render();
 });
 document.addEventListener("keydown", (e) => {
-  if (!S.openId || e.target.closest("textarea,input")) return;
+  if (!S.openId || e.target.closest("textarea,input") || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === "Escape") closeDrawer();
   else if (e.key === "ArrowRight") step(1);
   else if (e.key === "ArrowLeft") step(-1);
   else if ((e.key === "k" || e.key === "K") && S.canWrite) decide(S.openId, "keep", true);
   else if ((e.key === "r" || e.key === "R") && S.canWrite) decide(S.openId, "remove", true);
+  else if ((e.key === "t" || e.key === "T") && S.canWrite) { e.preventDefault(); $("#tagAdd")?.focus(); }
 });
 
 // ---------- boot ----------
@@ -726,6 +858,7 @@ const store = {
 function applyState(st) {
   S.decisions = new Map(Object.entries(st.decisions || {}));
   S.overrides = new Map(Object.entries(st.photographers || {}));
+  S.tagMarks = new Map(Object.entries(st.tagqc || {}));
 }
 async function connect(pw, name) {
   S.pw = pw; S.me = name;

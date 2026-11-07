@@ -8,6 +8,9 @@ for each site placement (for example `living_room + seating`), and record the ph
   (`grey`/`gray`, `living_room`/`living-room`).
 - **Shared marks:** Keep/Remove and notes are saved per placement and shared with the team.
   Export the removal list as CSV.
+- **Tag QC:** in an image's detail view, flag wrong tags to remove and add missing ones. Changes
+  are saved per image and shared with the team, and can be exported as CSV. The app doesn't
+  write to Candid; each change clears once Candid's feed shows it.
 - **Photographer credit:** read from the caption (📸, Photo by, Photography:, Shot by, …),
   or entered by the team.
 

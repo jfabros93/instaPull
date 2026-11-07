@@ -1,6 +1,6 @@
-"""/api/state — the team's Keep/Remove decisions and photographer entries.
+"""/api/state — the team's Keep/Remove decisions, photographer entries and tag changes.
 
-GET  returns {"decisions": {key: doc}, "photographers": {key: doc}}
+GET  returns {"decisions": {key: doc}, "photographers": {key: doc}, "tagqc": {key: doc}}
 POST takes {"ops": [{"op": "set"|"delete", "collection", "key", "value"?}]}
 
 Both need the X-Team-Password header to match the TEAM_PASSWORD environment variable.
