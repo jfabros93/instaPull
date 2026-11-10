@@ -129,8 +129,8 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
 .btn:disabled { opacity: .5; cursor: default; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
-@media (max-width: 480px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.grid { --tile: 320px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--tile), 100%), 1fr)); gap: 12px; }
+@media (max-width: 480px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .grid.one { grid-template-columns: minmax(0, 1fr); } }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; position: relative; }
 .tile.keep { border-color: var(--keep); box-shadow: inset 0 0 0 1px var(--keep); }
 .tile.remove { border-color: var(--remove); box-shadow: inset 0 0 0 1px var(--remove); }
@@ -257,6 +257,12 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
           <option value="user">By poster</option>
           <option value="photographer">By photographer</option>
         </select>
+        <select id="tileSize" class="sel" aria-label="Image size">
+          <option value="170">Small images</option>
+          <option value="230">Medium images</option>
+          <option value="320">Large images</option>
+          <option value="480">Extra large images</option>
+        </select>
         <select id="credit" class="sel" aria-label="Photographer credit">
           <option value="any">Any photographer credit</option>
           <option value="has">Photographer found</option>
@@ -297,18 +303,31 @@ main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 </div>
 
 <script>
-const SECTIONS = [
-  { name: "Design by Category", tags: [["", "All"], ["seating", "Seating"], ["tables", "Tables"], ["lighting", "Lighting"], ["mirrors", "Mirrors"], ["storage_display", "Storage & Display"], ["decor", "Decor"], ["rugs", "Rugs"]] },
-  { name: "Design by Palette", tags: [["blue", "Blue"], ["green", "Green"], ["brown", "Brown"], ["pink", "Pink"], ["grey", "Grey"]] },
-  { name: "Design by Material", tags: [["iron", "Iron"], ["rattan", "Rattan"], ["realistic-faux-shagreen", "Shagreen"], ["veneer", "Veneer"]] },
-];
+// Menus on the live Design by Room pages (madegoods.com/design-by-room/<page>), read Nov 10, 2026.
+const SECTIONS = {
+  living_room: { page: "living-room", groups: [
+    { name: "Design by Category", tags: [["", "All"], ["seating", "Seating"], ["tables", "Tables"], ["lighting", "Lighting"], ["mirrors", "Mirrors"], ["storage_display", "Storage & Display"], ["decor", "Decor"]] },
+    { name: "Design by Palette", tags: [["blue", "Blue"], ["green", "Green"], ["brown", "Brown"], ["pink", "Pink"], ["grey", "Grey"]] },
+    { name: "Design by Material", tags: [["iron", "Iron"], ["faux-belgian-linen", "Faux Belgian Linen"], ["realistic-faux-shagreen", "Shagreen"], ["veneer", "Veneer"]] },
+  ] },
+  dining_room: { page: "dining-room", groups: [
+    { name: "Design by Category", tags: [["", "All"], ["seating", "Seating"], ["tables", "Tables"], ["lighting", "Lighting"], ["mirrors", "Mirrors"]] },
+    { name: "Design by Palette", tags: [["blue", "Blue"], ["brown", "Brown"], ["green", "Green"], ["white", "White"]] },
+    { name: "Design by Material", tags: [["rattan", "Rattan"], ["wood", "Wood"], ["cane", "Cane"]] },
+  ] },
+  bedroom: { page: "bedroom", groups: [
+    { name: "Design by Category", tags: [["", "All"], ["seating", "Seating"], ["lighting", "Lighting"], ["mirrors", "Mirrors"], ["beds", "Beds & Headboards"], ["dressers", "Dressers"], ["nightstands", "Nightstands"]] },
+    { name: "Design by Palette", tags: [["blue", "Blue"], ["white", "White"], ["green", "Green"], ["brown", "Brown"], ["pink", "Pink"]] },
+    { name: "Design by Material", tags: [["faux-raffia", "Faux raffia"], ["vintage-faux-shagreen", "Vintage faux shagreen"], ["full-grain-leather", "Full-grain leather"], ["faux-belgian-linen", "Faux Belgian linen"], ["veneer", "Veneer"]] },
+  ] },
+};
 const ROOMS = ["living_room", "dining_room", "bedroom", "kitchen", "bathroom", "entryway", "office"];
 const PAGE = 120;
 
 const S = {
   images: [], byId: new Map(), tagCount: new Map(), overrides: new Map(),
   must: ["living_room", "blue"], any: [], not: [],
-  status: "all", q: "", sort: "date", credit: "any", tagQc: "any", shown: PAGE,
+  status: "all", q: "", sort: "date", credit: "any", tagQc: "any", tile: "320", shown: PAGE,
   decisions: new Map(), tagMarks: new Map(), tagIdx: new Map(), pw: "", me: "", connected: false, canWrite: false,
   view: [], openId: null, room: "living_room",
 };
@@ -420,6 +439,13 @@ function compute() {
 }
 
 // ---------- render ----------
+// Results grid size: tiles are at least this wide; on phones Large and up show one per row.
+const TILE_SIZES = ["170", "230", "320", "480"];
+function tileSizes() { const w = +S.tile; return `(max-width: 480px) ${w >= 320 ? 100 : 50}vw, ${Math.round(w * 1.4)}px`; }
+function applyTileSize() {
+  const g = $("#grid"); g.style.setProperty("--tile", S.tile + "px"); g.classList.toggle("one", +S.tile >= 320);
+  $("#tileSize").value = S.tile;
+}
 function render() {
   renderInputs();
   renderPresets();
@@ -472,7 +498,7 @@ function tile(img) {
   const st = d?.status;
   const t = el("article", { class: "tile" + (st ? " " + st : ""), "data-id": img.id });
   const ph = el("button", { class: "ph", type: "button", "aria-label": `Open image by @${img.user}`, onclick: () => openDrawer(img.id) });
-  ph.append(picture(img, { src: sized(img, 400), srcset: `${sized(img, 400)} 400w, ${sized(img, 800)} 800w`, sizes: "(max-width: 480px) 50vw, 220px", loading: "lazy", decoding: "async" }));
+  ph.append(picture(img, { src: sized(img, 400), srcset: `${sized(img, 400)} 400w, ${sized(img, 800)} 800w, ${sized(img, 1200)} 1200w`, sizes: tileSizes(), loading: "lazy", decoding: "async" }));
   if (st) ph.append(el("span", { class: "badge " + st, text: st }));
   const changes = tagChanges(img.id);
   if (changes.length) {
@@ -526,8 +552,10 @@ function showVariantGap(t, alts) {
 
 function renderPresets() {
   const box = $("#presets"); box.replaceChildren();
-  const room = S.room;
-  for (const sec of SECTIONS) {
+  const room = S.room, site = SECTIONS[room];
+  if (!site) { box.append(el("p", { class: "stamp", text: `${room} doesn't have a Design by Room page on madegoods.com yet, so there are no section presets. Use the tag filter below.` })); return; }
+  box.append(el("a", { class: "textbtn", href: `https://www.madegoods.com/design-by-room/${site.page}`, target: "_blank", rel: "noopener" }, "Live page ↗"));
+  for (const sec of site.groups) {
     const g = el("div", { class: "preset-group" }, el("h3", { text: sec.name }));
     const row = el("div", { class: "row" });
     for (const [tag, label] of sec.tags) {
@@ -802,6 +830,7 @@ $("#tagPick").addEventListener("change", (e) => {
 $("#clearAll").addEventListener("click", () => { S.must = []; S.any = []; S.not = []; S.shown = PAGE; render(); });
 $("#q").addEventListener("input", (e) => { S.q = e.target.value.trim(); S.shown = PAGE; render(); });
 $("#sort").addEventListener("change", (e) => { S.sort = e.target.value; render(); });
+$("#tileSize").addEventListener("change", (e) => { S.tile = e.target.value; store.set("candid.tile", S.tile); applyTileSize(); render(); });
 $("#credit").addEventListener("change", (e) => { S.credit = e.target.value; S.shown = PAGE; render(); });
 $("#moreBtn").addEventListener("click", () => { S.shown += PAGE; render(); });
 $("#exportBtn").addEventListener("click", exportList);
@@ -898,6 +927,8 @@ async function refresh() {
 setInterval(refresh, 15000);
 document.addEventListener("visibilitychange", refresh);
 
+S.tile = TILE_SIZES.includes(store.get("candid.tile")) ? store.get("candid.tile") : "320";
+applyTileSize();
 render();
 loadCatalog();
 if (store.get("candid.pw") && store.get("candid.name")) connect(store.get("candid.pw"), store.get("candid.name")).catch(() => showGate());
