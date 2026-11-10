@@ -344,6 +344,9 @@ const el = (tag, attrs = {}, ...kids) => {
   return n;
 };
 const fmtDate = (ms) => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+// The image in Candid's dashboard (opens if you're signed in to Candid).
+const CANDID_STREAM = "7e4da7e1-7e92-4c00-af90-c93d9d1e34a4";
+const candidUrl = (id) => `https://www.getcandid.com/stream/view/?id=${CANDID_STREAM}&approvalFilter=Approved&term=&ids=${encodeURIComponent(id)}`;
 // Candid resizes on request: ?w= is the width in pixels.
 const sized = (img, w) => `${img.image}?w=${w}`;
 function picture(img, attrs) {
@@ -608,6 +611,7 @@ function renderDrawer() {
   drawer.append(el("div", { class: "links" },
     el("a", { href: img.image, target: "_blank", rel: "noopener" }, "Full-size image ↗"),
     img.link ? el("a", { href: img.link, target: "_blank", rel: "noopener" }, "Original post ↗") : null,
+    el("a", { href: candidUrl(img.id), target: "_blank", rel: "noopener", title: "Opens in Candid if you're signed in" }, "Open in Candid ↗"),
     el("span", { class: "stamp", text: `@${img.user} · ${fmtDate(img.date)} · ID ${img.id}` })));
 
   drawer.append(...tagSection(img));
@@ -768,10 +772,10 @@ async function exportList() {
   const scope = scopeKey();
   const rows = [...S.decisions.values()].filter((d) => d.scope === scope && d.status === "remove");
   if (!rows.length) return toast(`No images are marked Remove for ${scopeLabel(scope)} yet.`);
-  const lines = [["placement", "media_id", "user", "photographer", "photographer_source", "original_post", "image", "note", "marked_by", "marked_on"].join(",")];
+  const lines = [["placement", "media_id", "user", "photographer", "photographer_source", "original_post", "candid", "image", "note", "marked_by", "marked_on"].join(",")];
   for (const r of rows) {
     const img = S.byId.get(r.mediaId) || {};
-    lines.push([scope, r.mediaId, img.user ? "@" + img.user : "", img.id ? pg(img).name : "", img.id ? HOW[pg(img).how] || "" : "", img.link, img.image, r.note, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
+    lines.push([scope, r.mediaId, img.user ? "@" + img.user : "", img.id ? pg(img).name : "", img.id ? HOW[pg(img).how] || "" : "", img.link, candidUrl(r.mediaId), img.image, r.note, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
   }
   const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
   const a = el("a", { href: url, download: `candid-remove-${safe(scope)}.csv` });
@@ -791,10 +795,10 @@ function exportTagChanges() {
   const filtered = S.must.length || S.any.length || S.not.length;
   const total = [...S.tagIdx.values()].reduce((n, l) => n + l.length, 0);
   if (!rows.length) return toast(total ? `No tag changes in this filter. Clear the filter to export all ${total}.` : "No tag changes yet. Open an image to flag some.");
-  const lines = [["media_id", "action", "tag", "new_tag", "user", "current_tags", "original_post", "image", "marked_by", "marked_on"].join(",")];
+  const lines = [["media_id", "action", "tag", "new_tag", "user", "current_tags", "original_post", "candid", "image", "marked_by", "marked_on"].join(",")];
   for (const r of rows) {
     const img = S.byId.get(r.mediaId);
-    lines.push([r.mediaId, r.action, r.tag, r.action === "add" && !S.tagCount.has(r.tag) ? "yes" : "no", "@" + img.user, img.tags.join(" | "), img.link, img.image, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
+    lines.push([r.mediaId, r.action, r.tag, r.action === "add" && !S.tagCount.has(r.tag) ? "yes" : "no", "@" + img.user, img.tags.join(" | "), img.link, candidUrl(r.mediaId), img.image, r.by || "", new Date(r.at).toISOString().slice(0, 10)].map(csvCell).join(","));
   }
   const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
   const a = el("a", { href: url, download: `candid-tag-changes-${filtered ? safe(scopeKey()) : "all"}.csv` });
